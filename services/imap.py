@@ -12,28 +12,28 @@ email_address = os.environ["PERSONAL_EMAIL"]
 password = os.environ["EMAIL_PWD"]
 
 # Connect to the mail server
-mail = imaplib.IMAP4_SSL("outlook.office365.com")
+
 
 
 def get_last_email():
+    outlook_server = imaplib.IMAP4_SSL("outlook.office365.com")
     # Login to your email account
-    mail.login(email_address, password)
+    outlook_server.login(email_address, password)
 
     # Select the mailbox (inbox in this case)
-    mail.select("inbox")
+    outlook_server.select("inbox")
 
     # Search for all emails and fetch the latest one
-    result, data = mail.search(None, "ALL")
+    result, data = outlook_server.search(None, "ALL")
     latest_email_id = data[0].split()[-1]
 
     # Fetch the latest email
-    result, message_data = mail.fetch(latest_email_id, "(RFC822)")
+    result, message_data = outlook_server.fetch(latest_email_id, "(RFC822)")
     raw_email = message_data[0][1]
 
     # Parse the raw email
     msg = email.message_from_bytes(raw_email)
 
-    # Get the subject, sender, and body
     subject, encoding = decode_header(msg["Subject"])[0]
     if isinstance(subject, bytes):
         subject = subject.decode(encoding or "utf-8")
@@ -47,19 +47,14 @@ def get_last_email():
         # If the email is multipart (contains both text and HTML parts)
         for part in msg.walk():
             if part.get_content_type() == "text/plain":
-                print('PLAIN TEXT')
+                text_body = part.get_payload(decode=True).decode(part.get_content_charset() or "utf-8")
             elif part.get_content_type() == "text/html":
-                print('TEXT HTML')
                 html_body = part.get_payload(decode=True).decode(part.get_content_charset() or "utf-8")
-                # print(body)
                 soup = BeautifulSoup(html_body, 'html.parser')
                 text_body += soup.get_text()
     else:
         # If the email is not multipart
         body = msg.get_payload()
-        print(body)
-        print('NOT MULTIPART')
-        print(body)
         soup = BeautifulSoup(body, 'html.parser')
         text_body += soup.get_text()
 
@@ -69,7 +64,70 @@ def get_last_email():
     print("Sender:", sender)
     # Logout from the email server
     print("Body:", text_body)
-    mail.logout()
+    outlook_server.logout()
 
     return {'subject': subject, 'sender': sender, 'body': text_body}
 
+def check_for_new_emails(username=email_address, password=password, mailbox='inbox'):
+    try:
+        outlook_server = imaplib.IMAP4_SSL("outlook.office365.com")
+        outlook_server.login(username, password)
+        outlook_server.select(mailbox)
+
+        print('Checking for new email')
+
+        # Search for unseen emails
+        status, messages = outlook_server.search(None, 'UNSEEN')
+
+        if len(messages) == 0:
+            print('No new emails to check')
+        email_ids = messages[0].split()
+
+        # If there are unseen emails, fetch and process the latest one
+        if email_ids:
+            latest_email_id = email_ids[-1]  # Get the latest unseen email
+            status, msg_data = outlook_server.fetch(latest_email_id, '(RFC822)')
+
+            # Parse the email content
+            raw_email = msg_data[0][1]
+            msg = email.message_from_bytes(raw_email)
+
+            subject, encoding = decode_header(msg["Subject"])[0]
+            if isinstance(subject, bytes):
+                subject = subject.decode(encoding or "utf-8")
+
+            sender, encoding = decode_header(msg.get("From"))[0]
+            if isinstance(sender, bytes):
+                sender = sender.decode(encoding or "utf-8")
+
+            text_body = ""
+            if msg.is_multipart():
+                # If the email is multipart (contains both text and HTML parts)
+                for part in msg.walk():
+                    if part.get_content_type() == "text/plain":
+                        text_body = part.get_payload(decode=True).decode(part.get_content_charset() or "utf-8")
+                    elif part.get_content_type() == "text/html":
+                        html_body = part.get_payload(decode=True).decode(part.get_content_charset() or "utf-8")
+                        soup = BeautifulSoup(html_body, 'html.parser')
+                        text_body += soup.get_text()
+            else:
+                # If the email is not multipart
+                body = msg.get_payload()
+                soup = BeautifulSoup(body, 'html.parser')
+                text_body += soup.get_text()
+
+            # Return the details of the last unseen email
+            last_email = {'subject': subject, 'sender': sender, 'body': text_body}
+
+        else:
+            # No unseen emails found
+            last_email = None
+
+        # Logout from the Outlook IMAP server
+        outlook_server.logout()
+        print(last_email)
+        return last_email
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return None

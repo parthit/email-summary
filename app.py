@@ -1,9 +1,10 @@
 from flask import Flask, request, jsonify
 from services.llm import make_oai_call
-from services.imap import get_last_email
+from services.imap import get_last_email, check_for_new_emails
 from services.outlook_smtp import send_summarized_email
 import json
 import threading
+import time
 
 app = Flask(__name__)
 
@@ -47,6 +48,29 @@ def get_last_received_email():
             return jsonify({"subject": subject, "sender": sender, "body": body})
         else:
             return jsonify({"error": "No emails found."})
+
+
+# Create a global variable to store the last received email
+last_received_email = {}
+
+# Define a function to periodically check for new emails in a separate thread
+def email_check_thread():
+    global last_received_email
+    while True:
+        try:
+            # Use the check_for_new_emails function to get the latest email
+            last_received_email = check_for_new_emails()
+        except Exception as e:
+            print(f"An error occurred during email checking: {e}")
+
+        # Sleep for 30 seconds before checking for new emails again
+        time.sleep(30)
+
+# Start the email-checking thread when the application starts
+email_thread = threading.Thread(target=email_check_thread)
+email_thread.daemon = True  # Allow the thread to be terminated when the main program exits
+email_thread.start()
+
 
              
 
