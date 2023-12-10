@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 from services.llm import make_oai_call
 from services.imap import get_last_email
+from services.outlook_smtp import send_summarized_email
 import json
 import threading
 
@@ -9,6 +10,19 @@ app = Flask(__name__)
 @app.route('/')
 def hello_world():
     return 'Hello, LLama Hack!'
+
+@app.route('/send_email', methods=["GET"])
+def sned_summarized_email():
+    if request.method == "GET":
+        email_body = get_last_email()['body']
+        summarized_email_response = make_oai_call(email_body, model="gpt-3.5-turbo-1106")
+        summarized_email_response = json.loads(summarized_email_response)
+
+        subject = summarized_email_response['subject']
+        body = summarized_email_response['body']
+        response = send_summarized_email(subject=subject, summary=body, email_body=email_body)
+
+        return response
 
 @app.route('/summarize', methods=["GET"])
 def summarize_email():
