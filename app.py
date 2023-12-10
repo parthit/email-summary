@@ -12,7 +12,7 @@ def hello_world():
     return 'Hello, LLama Hack!'
 
 @app.route('/send_email', methods=["GET"])
-def sned_summarized_email():
+def send_summarized_email():
     if request.method == "GET":
         email_body = get_last_email()['body']
         summarized_email_response = make_oai_call(email_body, model="gpt-3.5-turbo-1106")
